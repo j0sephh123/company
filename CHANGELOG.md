@@ -13,5 +13,15 @@
 - add
 - delete
 
+## Deployed
+
 ## v0.0.1
 - setup deployment to github pages
+
+## v0.0.2
+- add vitest tests and coverage only for .ts files that are not hooks. 
+
+# Planned
+
+## v0.0.3
+- include the version in the app logo

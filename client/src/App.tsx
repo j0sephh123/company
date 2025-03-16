@@ -515,7 +515,7 @@ function App() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Company Dashboard</h1>
+      <h1 className="text-2xl font-bold mb-6">Company Dashboard v{import.meta.env.VITE_APP_VERSION}</h1>
 
       {/* Tabs */}
       <div className="tabs tabs-boxed mb-6">

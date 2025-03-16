@@ -25,6 +25,7 @@ export default defineConfig({
         "src/**/*.hook.ts",
         "src/**/*.hooks.ts",
         "src/**/use*.ts",
+        "src/**/*.d.ts",
       ],
     },
   },

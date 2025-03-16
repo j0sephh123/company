@@ -12,3 +12,6 @@
 ### Assigment
 - add
 - delete
+
+## v0.0.1
+- setup deployment to github pages

@@ -399,7 +399,7 @@ function App() {
               <td>{emp.name}</td>
               <td>{emp.role}</td>
               <td>{emp.department}</td>
-              <td>${emp.salary.toLocaleString()}</td>
+              <td>${emp.salary}</td>
               <td className="flex gap-2">
                 <button
                   onClick={() => startEditing(emp)}

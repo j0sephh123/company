@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+// import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { PropsWithChildren } from "react";
 
 const generateGcTime = (minutes: number) => minutes * 60 * 1000;
@@ -17,11 +17,11 @@ const queryClient = new QueryClient({
 export default function ReactQueryProvider({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
-      <ReactQueryDevtools
+      {/* <ReactQueryDevtools
         buttonPosition="bottom-left"
         position="left"
         initialIsOpen
-      />
+      /> */}
 
       {children}
     </QueryClientProvider>

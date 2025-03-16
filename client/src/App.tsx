@@ -1,75 +1,89 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
-import { getInitialAssignments } from "./utils";
+import { generateRandomString } from "./utils";
+import { Assignment, Employee, Project, Tabs } from "./types";
+import employeeFactory from "./domain/employee/employeeFactory";
+import projectFactory from "./domain/project/projectFactory";
+import TabsComponent from "./components/TabsComponent";
+import EmployeeForm from "./components/EmployeeForm";
+import ProjectForm from "./components/ProjectForm";
+import AssignmentForm from "./components/AssignmentForm";
+import Table, { Column } from "./components/Table";
+import useEditStore from "./store/editStore";
+import { useEmployees, useProjects, useAssignments } from "./hooks/useQueries";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+
+type EmployeeFormData = Omit<Employee, "id">;
+type ProjectFormData = Omit<Project, "id">;
+type AssignmentFormData = {
+  employeeId: string;
+  projectId: string;
+};
+
+type FormDataType = EmployeeFormData | ProjectFormData | AssignmentFormData;
+
+// Create a client
+const queryClient = new QueryClient();
+
+// Wrap the app with QueryClientProvider
+export default function AppWrapper() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  );
+}
 
 function App() {
-  // Initial data
-  const initialEmployees = [
-    {
-      id: 1,
-      name: "Jane Doe",
-      role: "Developer",
-      department: "Engineering",
-      salary: 85000,
-    },
-    {
-      id: 2,
-      name: "John Smith",
-      role: "Designer",
-      department: "Design",
-      salary: 75000,
-    },
-    {
-      id: 3,
-      name: "Sarah Johnson",
-      role: "Manager",
-      department: "Engineering",
-      salary: 110000,
-    },
-  ];
+  // Use React Query hooks instead of useState with initial data
+  const { data: employees = [] } = useEmployees();
+  console.log({employees});
+  
+  const { data: projects = [] } = useProjects();
+  const { data: assignments = [] } = useAssignments();
+  const queryClient = useQueryClient();
 
-  const initialProjects = [
-    {
-      id: 1,
-      name: "Website Redesign",
-      deadline: "2023-12-15",
-      budget: 25000,
-      status: "In Progress",
+  const [activeTab, setActiveTab] = useState<Tabs>("employees");
+  const [formData, setFormData] = useState<FormDataType>({} as FormDataType);
+  const { editingId, setEditingId, resetEditingId } = useEditStore();
+
+  // Mutations for data updates
+  const employeeMutation = useMutation({
+    mutationFn: (newEmployee: Employee) => Promise.resolve(newEmployee),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
-    {
-      id: 2,
-      name: "Mobile App",
-      deadline: "2024-03-30",
-      budget: 80000,
-      status: "Planning",
+  });
+
+  const projectMutation = useMutation({
+    mutationFn: (newProject: Project) => Promise.resolve(newProject),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
-  ];
+  });
 
-  const initialAssignments = getInitialAssignments();
+  const assignmentMutation = useMutation({
+    mutationFn: (newAssignment: Assignment) => Promise.resolve(newAssignment),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assignments"] });
+    },
+  });
 
-  // State
-  const [employees, setEmployees] = useState(initialEmployees);
-  const [projects, setProjects] = useState(initialProjects);
-  const [assignments, setAssignments] = useState(initialAssignments);
-  const [activeTab, setActiveTab] = useState("employees");
-  const [formData, setFormData] = useState({});
-  const [editingId, setEditingId] = useState(null);
-
-  // CRUD operations for employees
-  const addEmployee = (employee: any) => {
-    const newEmployee = {
-      ...employee,
-      id:
-        employees.length > 0 ? Math.max(...employees.map((e) => e.id)) + 1 : 1,
-    };
-    console.log(newEmployee);
-
-    setEmployees([...employees, newEmployee]);
+  const addEmployee = (employee: EmployeeFormData) => {
+    const newEmployee = employeeFactory(employee);
+    employeeMutation.mutate(newEmployee);
+    queryClient.setQueryData(["employees"], [...employees, newEmployee]);
     resetForm();
   };
 
-  const updateEmployee = (updatedEmployee: any) => {
-    setEmployees(
+  const updateEmployee = (updatedEmployee: Employee) => {
+    employeeMutation.mutate(updatedEmployee);
+    queryClient.setQueryData(
+      ["employees"],
       employees.map((emp) =>
         emp.id === updatedEmployee.id ? updatedEmployee : emp
       )
@@ -77,24 +91,30 @@ function App() {
     resetForm();
   };
 
-  const deleteEmployee = (id: any) => {
-    setEmployees(employees.filter((emp) => emp.id !== id));
-    // Also remove any assignments for this employee
-    setAssignments(assignments.filter((a) => a.employeeId !== id));
+  const deleteEmployee = (id: Employee["id"]) => {
+    // Create a direct mutation first to update UI immediately
+    const filteredEmployees = employees.filter((emp) => emp.id !== id);
+    const filteredAssignments = assignments.filter((a) => a.employeeId !== id);
+
+    // Update the cache immediately for UI consistency
+    queryClient.setQueryData(["employees"], filteredEmployees);
+    queryClient.setQueryData(["assignments"], filteredAssignments);
+
+    // Then trigger the mutation for server-side effects
+    employeeMutation.mutate({ id } as Employee);
   };
 
-  // CRUD operations for projects
-  const addProject = (project: any) => {
-    const newProject = {
-      ...project,
-      id: projects.length > 0 ? Math.max(...projects.map((p) => p.id)) + 1 : 1,
-    };
-    setProjects([...projects, newProject]);
+  const addProject = (project: ProjectFormData) => {
+    const newProject = projectFactory(project);
+    projectMutation.mutate(newProject);
+    queryClient.setQueryData(["projects"], [...projects, newProject]);
     resetForm();
   };
 
-  const updateProject = (updatedProject: any) => {
-    setProjects(
+  const updateProject = (updatedProject: Project) => {
+    projectMutation.mutate(updatedProject);
+    queryClient.setQueryData(
+      ["projects"],
       projects.map((proj) =>
         proj.id === updatedProject.id ? updatedProject : proj
       )
@@ -102,15 +122,20 @@ function App() {
     resetForm();
   };
 
-  const deleteProject = (id: any) => {
-    setProjects(projects.filter((proj) => proj.id !== id));
-    // Also remove any assignments for this project
-    setAssignments(assignments.filter((a) => a.projectId !== id));
+  const deleteProject = (id: Project["id"]) => {
+    // Create a direct mutation first to update UI immediately
+    const filteredProjects = projects.filter((proj) => proj.id !== id);
+    const filteredAssignments = assignments.filter((a) => a.projectId !== id);
+
+    // Update the cache immediately for UI consistency
+    queryClient.setQueryData(["projects"], filteredProjects);
+    queryClient.setQueryData(["assignments"], filteredAssignments);
+
+    // Then trigger the mutation for server-side effects
+    projectMutation.mutate({ id } as Project);
   };
 
-  // Assignment operations
-  const addAssignment = (assignment: any) => {
-    // Check if assignment already exists
+  const addAssignment = (assignment: Assignment) => {
     const exists = assignments.some(
       (a) =>
         a.employeeId === assignment.employeeId &&
@@ -120,394 +145,220 @@ function App() {
     if (!exists) {
       const newAssignment = {
         ...assignment,
-        id:
-          assignments.length > 0
-            ? Math.max(...assignments.map((a) => a.id)) + 1
-            : 1,
+        id: generateRandomString(8),
       };
-      setAssignments([...assignments, newAssignment]);
+      assignmentMutation.mutate(newAssignment);
+      queryClient.setQueryData(
+        ["assignments"],
+        [...assignments, newAssignment]
+      );
     }
     resetForm();
   };
 
-  const deleteAssignment = (id: any) => {
-    setAssignments(assignments.filter((a) => a.id !== id));
+  const deleteAssignment = (id: Assignment["id"]) => {
+    assignmentMutation.mutate({ id } as Assignment);
+    queryClient.setQueryData(
+      ["assignments"],
+      assignments.filter((a) => a.id !== id)
+    );
   };
 
-  // Form handling
-  const handleInputChange = (e: any) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = (e: any) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (activeTab === "employees") {
+      const employeeData = formData as EmployeeFormData;
       if (editingId) {
-        updateEmployee({ ...formData, id: editingId });
+        updateEmployee({ ...employeeData, id: editingId });
       } else {
-        addEmployee(formData);
+        addEmployee(employeeData);
       }
     } else if (activeTab === "projects") {
+      const projectData = formData as ProjectFormData;
       if (editingId) {
-        updateProject({ ...formData, id: editingId });
+        updateProject({ ...projectData, id: editingId });
       } else {
-        addProject(formData);
+        addProject(projectData);
       }
     } else if (activeTab === "assignments") {
-      addAssignment({
-        employeeId: parseInt((formData as any).employeeId),
-        projectId: parseInt((formData as any).projectId),
-      });
+      const assignmentData = formData as AssignmentFormData;
+      const newAssignment = {
+        id: generateRandomString(8),
+        employeeId: assignmentData.employeeId,
+        projectId: assignmentData.projectId,
+      };
+      addAssignment(newAssignment);
     }
   };
 
-  const startEditing = (item: any) => {
+  const startEditing = (item: Employee | Project) => {
     setFormData(item);
     setEditingId(item.id);
   };
 
   const resetForm = () => {
-    setFormData({});
-    setEditingId(null);
+    setFormData({} as FormDataType);
+    resetEditingId();
   };
 
-  // Get employee and project names for assignments display
-  const getEmployeeName = (id: any) => {
+  const getEmployeeName = (id: Employee["id"]) => {
     const employee = employees.find((e) => e.id === id);
     return employee ? employee.name : "Unknown";
   };
 
-  const getProjectName = (id: any) => {
+  const getProjectName = (id: Project["id"]) => {
     const project = projects.find((p) => p.id === id);
     return project ? project.name : "Unknown";
   };
 
-  // Render functions
+  const handleTabChange = (tab: Tabs) => {
+    setActiveTab(tab);
+    resetForm();
+  };
+
   const renderEmployeeForm = () => (
-    <form
+    <EmployeeForm
+      formData={formData as EmployeeFormData}
+      editingId={editingId}
+      onInputChange={handleInputChange}
       onSubmit={handleSubmit}
-      className="form-control w-full max-w-md p-4 bg-base-200 rounded-lg"
-    >
-      <h3 className="text-lg font-bold mb-4">
-        {editingId ? "Edit Employee" : "Add Employee"}
-      </h3>
-
-      <div className="mb-4">
-        <label className="label">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={(formData as any).name || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Role</label>
-        <input
-          type="text"
-          name="role"
-          value={(formData as any).role || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Department</label>
-        <input
-          type="text"
-          name="department"
-          value={(formData as any).department || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Salary</label>
-        <input
-          type="number"
-          name="salary"
-          value={(formData as any).salary || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="flex gap-2">
-        <button type="submit" className="btn btn-primary">
-          {editingId ? "Update" : "Add"}
-        </button>
-        {editingId && (
-          <button type="button" onClick={resetForm} className="btn">
-            Cancel
-          </button>
-        )}
-      </div>
-    </form>
+      onReset={resetForm}
+    />
   );
 
   const renderProjectForm = () => (
-    <form
+    <ProjectForm
+      formData={formData as ProjectFormData}
+      editingId={editingId}
+      onInputChange={handleInputChange}
       onSubmit={handleSubmit}
-      className="form-control w-full max-w-md p-4 bg-base-200 rounded-lg"
-    >
-      <h3 className="text-lg font-bold mb-4">
-        {editingId ? "Edit Project" : "Add Project"}
-      </h3>
-
-      <div className="mb-4">
-        <label className="label">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={(formData as any).name || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Deadline</label>
-        <input
-          type="date"
-          name="deadline"
-          value={(formData as any).deadline || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Budget</label>
-        <input
-          type="number"
-          name="budget"
-          value={(formData as any).budget || ""}
-          onChange={handleInputChange}
-          className="input input-bordered w-full"
-          required
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Status</label>
-        <select
-          name="status"
-          value={(formData as any).status || ""}
-          onChange={handleInputChange}
-          className="select select-bordered w-full"
-          required
-        >
-          <option value="">Select Status</option>
-          <option value="Planning">Planning</option>
-          <option value="In Progress">In Progress</option>
-          <option value="On Hold">On Hold</option>
-          <option value="Completed">Completed</option>
-        </select>
-      </div>
-
-      <div className="flex gap-2">
-        <button type="submit" className="btn btn-primary">
-          {editingId ? "Update" : "Add"}
-        </button>
-        {editingId && (
-          <button type="button" onClick={resetForm} className="btn">
-            Cancel
-          </button>
-        )}
-      </div>
-    </form>
+      onReset={resetForm}
+    />
   );
 
   const renderAssignmentForm = () => (
-    <form
+    <AssignmentForm
+      formData={formData as AssignmentFormData}
+      employees={employees}
+      projects={projects}
+      onInputChange={handleInputChange}
       onSubmit={handleSubmit}
-      className="form-control w-full max-w-md p-4 bg-base-200 rounded-lg"
-    >
-      <h3 className="text-lg font-bold mb-4">Assign Employee to Project</h3>
-
-      <div className="mb-4">
-        <label className="label">Employee</label>
-        <select
-          name="employeeId"
-          value={(formData as any).employeeId || ""}
-          onChange={handleInputChange}
-          className="select select-bordered w-full"
-          required
-        >
-          <option value="">Select Employee</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="mb-4">
-        <label className="label">Project</label>
-        <select
-          name="projectId"
-          value={(formData as any).projectId || ""}
-          onChange={handleInputChange}
-          className="select select-bordered w-full"
-          required
-        >
-          <option value="">Select Project</option>
-          {projects.map((proj) => (
-            <option key={proj.id} value={proj.id}>
-              {proj.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <button type="submit" className="btn btn-primary">
-        Assign
-      </button>
-    </form>
+    />
   );
 
-  const renderEmployees = () => (
-    <div className="overflow-x-auto">
-      <table className="table table-zebra w-full">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Department</th>
-            <th>Salary</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {employees.map((emp) => (
-            <tr key={emp.id}>
-              <td>{emp.id}</td>
-              <td>{emp.name}</td>
-              <td>{emp.role}</td>
-              <td>{emp.department}</td>
-              <td>${emp.salary}</td>
-              <td className="flex gap-2">
-                <button
-                  onClick={() => startEditing(emp)}
-                  className="btn btn-sm"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteEmployee(emp.id)}
-                  className="btn btn-sm btn-error"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const renderEmployees = () => {
+    const columns: Column<Employee>[] = [
+      { header: "ID", accessor: "id" },
+      { header: "Name", accessor: "name" },
+      { header: "Role", accessor: "role" },
+      { header: "Department", accessor: "department" },
+      {
+        header: "Salary",
+        accessor: (emp) => `$${emp.salary}`,
+      },
+      {
+        header: "Actions",
+        accessor: (emp) => (
+          <div className="flex gap-2">
+            <button onClick={() => startEditing(emp)} className="btn btn-sm">
+              Edit
+            </button>
+            <button
+              onClick={() => deleteEmployee(emp.id)}
+              className="btn btn-sm btn-error"
+            >
+              Delete
+            </button>
+          </div>
+        ),
+      },
+    ];
 
-  const renderProjects = () => (
-    <div className="overflow-x-auto">
-      <table className="table table-zebra w-full">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Deadline</th>
-            <th>Budget</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((proj) => (
-            <tr key={proj.id}>
-              <td>{proj.id}</td>
-              <td>{proj.name}</td>
-              <td>{proj.deadline}</td>
-              <td>${proj.budget.toLocaleString()}</td>
-              <td>
-                <span
-                  className={`badge ${
-                    proj.status === "Completed"
-                      ? "badge-success"
-                      : proj.status === "In Progress"
-                      ? "badge-info"
-                      : proj.status === "On Hold"
-                      ? "badge-warning"
-                      : "badge-ghost"
-                  }`}
-                >
-                  {proj.status}
-                </span>
-              </td>
-              <td className="flex gap-2">
-                <button
-                  onClick={() => startEditing(proj)}
-                  className="btn btn-sm"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteProject(proj.id)}
-                  className="btn btn-sm btn-error"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+    return <Table data={employees} columns={columns} keyField="id" />;
+  };
 
-  const renderAssignments = () => (
-    <div className="overflow-x-auto">
-      <table className="table table-zebra w-full">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Employee</th>
-            <th>Project</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {assignments.map((assignment) => (
-            <tr key={assignment.id}>
-              <td>{assignment.id}</td>
-              <td>{getEmployeeName(assignment.employeeId)}</td>
-              <td>{getProjectName(assignment.projectId)}</td>
-              <td>
-                <button
-                  onClick={() => deleteAssignment(assignment.id)}
-                  className="btn btn-sm btn-error"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const renderProjects = () => {
+    const columns: Column<Project>[] = [
+      { header: "ID", accessor: "id" },
+      { header: "Name", accessor: "name" },
+      { header: "Deadline", accessor: "deadline" },
+      {
+        header: "Budget",
+        accessor: (proj) => `$${proj.budget.toLocaleString()}`,
+      },
+      {
+        header: "Status",
+        accessor: (proj) => (
+          <span
+            className={`badge ${
+              proj.status === "Completed"
+                ? "badge-success"
+                : proj.status === "In Progress"
+                ? "badge-info"
+                : proj.status === "On Hold"
+                ? "badge-warning"
+                : "badge-ghost"
+            }`}
+          >
+            {proj.status}
+          </span>
+        ),
+      },
+      {
+        header: "Actions",
+        accessor: (proj) => (
+          <div className="flex gap-2">
+            <button onClick={() => startEditing(proj)} className="btn btn-sm">
+              Edit
+            </button>
+            <button
+              onClick={() => deleteProject(proj.id)}
+              className="btn btn-sm btn-error"
+            >
+              Delete
+            </button>
+          </div>
+        ),
+      },
+    ];
+
+    return <Table data={projects} columns={columns} keyField="id" />;
+  };
+
+  const renderAssignments = () => {
+    const columns: Column<Assignment>[] = [
+      { header: "ID", accessor: "id" },
+      {
+        header: "Employee",
+        accessor: (assignment) => getEmployeeName(assignment.employeeId),
+      },
+      {
+        header: "Project",
+        accessor: (assignment) => getProjectName(assignment.projectId),
+      },
+      {
+        header: "Actions",
+        accessor: (assignment) => (
+          <button
+            onClick={() => deleteAssignment(assignment.id)}
+            className="btn btn-sm btn-error"
+          >
+            Delete
+          </button>
+        ),
+      },
+    ];
+
+    return <Table data={assignments} columns={columns} keyField="id" />;
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -515,47 +366,23 @@ function App() {
         Company Dashboard v{import.meta.env.VITE_APP_VERSION}
       </h1>
 
-      {/* Tabs */}
-      <div className="tabs tabs-boxed mb-6">
-        <button
-          className={`tab ${activeTab === "employees" ? "tab-active" : ""}`}
-          onClick={() => {
-            setActiveTab("employees");
-            resetForm();
-          }}
-        >
-          Employees
-        </button>
-        <button
-          className={`tab ${activeTab === "projects" ? "tab-active" : ""}`}
-          onClick={() => {
-            setActiveTab("projects");
-            resetForm();
-          }}
-        >
-          Projects
-        </button>
-        <button
-          className={`tab ${activeTab === "assignments" ? "tab-active" : ""}`}
-          onClick={() => {
-            setActiveTab("assignments");
-            resetForm();
-          }}
-        >
-          Assignments
-        </button>
-      </div>
+      <TabsComponent
+        activeTab={activeTab}
+        onChange={handleTabChange}
+        options={[
+          { value: "employees", label: "Employees" },
+          { value: "projects", label: "Projects" },
+          { value: "assignments", label: "Assignments" },
+        ]}
+      />
 
-      {/* Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Form */}
         <div className="lg:col-span-1">
           {activeTab === "employees" && renderEmployeeForm()}
           {activeTab === "projects" && renderProjectForm()}
           {activeTab === "assignments" && renderAssignmentForm()}
         </div>
 
-        {/* Right column: Table */}
         <div className="lg:col-span-2">
           {activeTab === "employees" && renderEmployees()}
           {activeTab === "projects" && renderProjects()}
@@ -565,5 +392,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

@@ -13,7 +13,7 @@ test.describe("Project Management", () => {
 
   test("should add a new project", async () => {
     await dashboardPage.addProject(newProject);
-    
+
     const projectRow = await dashboardPage.getProjectRow(newProject.name);
     await expect(projectRow).toBeVisible();
     await expect(projectRow).toContainText(newProject.deadline);
@@ -27,28 +27,40 @@ test.describe("Project Management", () => {
       name: "Website Redesign",
       deadline: "2023-12-30",
       budget: "35000",
-      status: "On Hold"
+      status: "On Hold",
     };
-    
+
     await dashboardPage.editProject(targetProject, updatedData);
-    
+
     const projectRow = await dashboardPage.getProjectRow(targetProject);
     await expect(projectRow).toBeVisible();
     await expect(projectRow).toContainText(updatedData.deadline);
     await expect(projectRow).toContainText(updatedData.budget);
     await expect(projectRow).toContainText(updatedData.status);
   });
-  
+
   test("should delete a project", async () => {
-    const projectToDelete = "Mobile App";
-    
+    // First ensure we have a project to delete by adding one if it doesn't exist
+    const projectToDelete = newProject.name;
+
+    // Check if the project already exists
+    if (!(await dashboardPage.isProjectPresent(projectToDelete))) {
+      await dashboardPage.addProject(newProject);
+    }
+
+    // Verify the project exists before attempting deletion
+    expect(await dashboardPage.isProjectPresent(projectToDelete)).toBe(true);
+
     const initialCount = await dashboardPage.getProjectCount();
     await dashboardPage.deleteProject(projectToDelete);
-    
+
+    // Add a small wait to ensure UI updates
+    await dashboardPage.page.waitForTimeout(500);
+
     const finalCount = await dashboardPage.getProjectCount();
     expect(finalCount).toBe(initialCount - 1);
-    
-    const deleted = await dashboardPage.isProjectPresent(projectToDelete);
-    expect(deleted).toBe(false);
+
+    const isPresent = await dashboardPage.isProjectPresent(projectToDelete);
+    expect(isPresent).toBe(false);
   });
 });

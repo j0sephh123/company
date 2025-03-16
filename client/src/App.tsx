@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
+import { getInitialAssignments } from "./utils";
 
 function App() {
   // Initial data
@@ -44,12 +45,7 @@ function App() {
     },
   ];
 
-  const initialAssignments = [
-    { id: 1, employeeId: 1, projectId: 1 },
-    { id: 2, employeeId: 2, projectId: 1 },
-    { id: 3, employeeId: 3, projectId: 1 },
-    { id: 4, employeeId: 1, projectId: 2 },
-  ];
+  const initialAssignments = getInitialAssignments();
 
   // State
   const [employees, setEmployees] = useState(initialEmployees);
@@ -515,7 +511,9 @@ function App() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Company Dashboard v{import.meta.env.VITE_APP_VERSION}</h1>
+      <h1 className="text-2xl font-bold mb-6">
+        Company Dashboard v{import.meta.env.VITE_APP_VERSION}
+      </h1>
 
       {/* Tabs */}
       <div className="tabs tabs-boxed mb-6">
